@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "资质管理",
+        "title": "华宇资质管理",
         "width": 1280,
         "height": 800,
         "resizable": true,
