@@ -1,0 +1,7 @@
+# AI Log Plugin 推荐忽略项
+.specstory/
+.ailog/
+node_modules
+dist
+src-tauri/target
+.DS_Store
