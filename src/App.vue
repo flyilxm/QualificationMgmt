@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ImageWatermarkedPreview from "@/components/ImageWatermarkedPreview.vue";
 import PdfPagePreview from "@/components/PdfPagePreview.vue";
 import { useAppStore } from "@/stores/app";
 import { buildTreeFromFiles, type TreeNode } from "@/utils/tree";
@@ -234,15 +235,15 @@ function onTreeSelectKeys(keys: Array<string | number>) {
                 </div>
                 <n-divider style="margin: 8px 0" />
                 <div class="preview-body">
-                  <img
+                  <ImageWatermarkedPreview
                     v-if="store.currentFile.kind === 'image'"
-                    class="preview-img"
-                    :src="store.previewSrcFor(store.currentFile) ?? ''"
-                    alt=""
+                    :src="store.previewSrcFor(store.currentFile)"
+                    :watermark="store.watermarkOptions"
                   />
                   <PdfPagePreview
                     v-else
                     :src="store.previewSrcFor(store.currentFile)"
+                    :watermark="store.watermarkOptions"
                   />
                 </div>
               </template>
@@ -415,11 +416,6 @@ function onTreeSelectKeys(keys: Array<string | number>) {
   flex: 1;
   overflow: auto;
   text-align: center;
-}
-.preview-img {
-  max-width: 100%;
-  max-height: calc(100vh - 220px);
-  object-fit: contain;
 }
 .tag-bar {
   display: flex;

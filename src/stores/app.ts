@@ -9,7 +9,7 @@ import { loadPdfDocument, renderPdfPageToWatermarkedPng } from "@/utils/pdf";
 import type { WatermarkOptions, WatermarkPosition } from "@/utils/watermark";
 import Fuse from "fuse.js";
 import { defineStore } from "pinia";
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 
 export interface FileMeta {
   absolutePath: string;
@@ -55,6 +55,22 @@ export const useAppStore = defineStore("app", () => {
   const watermarkPosition = ref<WatermarkPosition>("mc");
   const watermarkRotation = ref(-28);
 
+  const WM_POSITIONS: readonly WatermarkPosition[] = [
+    "tl",
+    "tc",
+    "tr",
+    "ml",
+    "mc",
+    "mr",
+    "bl",
+    "bc",
+    "br",
+  ];
+
+  function isWatermarkPosition(s: string): s is WatermarkPosition {
+    return (WM_POSITIONS as readonly string[]).includes(s);
+  }
+
   const generated = ref<{ name: string; blob: Blob }[]>([]);
   const generating = ref(false);
   const generateProgress = ref({ done: 0, total: 0 });
@@ -97,6 +113,66 @@ export const useAppStore = defineStore("app", () => {
     else await s.delete("workDir");
     await s.save();
   }
+
+  async function hydrateWatermarkFromStore(
+    s: Awaited<ReturnType<typeof load>>,
+  ) {
+    const t = await s.get<string>("watermarkText");
+    if (typeof t === "string") watermarkText.value = t;
+    const o = await s.get<number>("watermarkOpacity");
+    if (typeof o === "number" && Number.isFinite(o)) {
+      watermarkOpacity.value = Math.min(1, Math.max(0.05, o));
+    }
+    const fs = await s.get<number>("watermarkFontSize");
+    if (typeof fs === "number" && Number.isFinite(fs) && fs >= 8 && fs <= 200) {
+      watermarkFontSize.value = fs;
+    }
+    const pos = await s.get<string>("watermarkPosition");
+    if (typeof pos === "string" && isWatermarkPosition(pos)) {
+      watermarkPosition.value = pos;
+    }
+    const rot = await s.get<number>("watermarkRotation");
+    if (typeof rot === "number" && Number.isFinite(rot)) {
+      watermarkRotation.value = Math.min(90, Math.max(-90, rot));
+    }
+  }
+
+  async function persistWatermarkSettings() {
+    try {
+      const s = await load("settings.json", { defaults: {}, autoSave: false });
+      await s.set("watermarkText", watermarkText.value);
+      await s.set("watermarkOpacity", watermarkOpacity.value);
+      await s.set("watermarkFontSize", watermarkFontSize.value);
+      await s.set("watermarkPosition", watermarkPosition.value);
+      await s.set("watermarkRotation", watermarkRotation.value);
+      await s.save();
+    } catch (e) {
+      console.error("persistWatermarkSettings", e);
+    }
+  }
+
+  let watermarkSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  let hydratingWatermark = false;
+
+  function schedulePersistWatermark() {
+    if (hydratingWatermark) return;
+    if (watermarkSaveTimer) clearTimeout(watermarkSaveTimer);
+    watermarkSaveTimer = setTimeout(() => {
+      watermarkSaveTimer = null;
+      void persistWatermarkSettings();
+    }, 350);
+  }
+
+  watch(
+    [
+      watermarkText,
+      watermarkOpacity,
+      watermarkFontSize,
+      watermarkPosition,
+      watermarkRotation,
+    ],
+    schedulePersistWatermark,
+  );
 
   async function mergeMetas(metas: FileMeta[]) {
     const seen = new Set<string>();
@@ -155,6 +231,10 @@ export const useAppStore = defineStore("app", () => {
   async function bootstrap() {
     const s = await load("settings.json", { defaults: {}, autoSave: false });
     workDir.value = (await s.get<string>("workDir")) ?? null;
+    hydratingWatermark = true;
+    await hydrateWatermarkFromStore(s);
+    await nextTick();
+    hydratingWatermark = false;
     await reloadFilesFromDb();
     if (workDir.value) {
       void runScan();
