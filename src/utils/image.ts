@@ -1,7 +1,8 @@
 import type { WatermarkOptions } from "./watermark";
 import { canvasToBlob, drawWatermarkOnCanvas } from "./watermark";
 
-const MAX_EDGE = 8192;
+/** 预览与导出须一致，否则同一 fontSize 在不同画布像素密度下相对大小不同 */
+export const IMAGE_RASTER_MAX_EDGE = 8192;
 
 function loadImageElement(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -41,7 +42,7 @@ export async function drawWatermarkedImageToCanvas(
   canvas: HTMLCanvasElement,
   assetUrl: string,
   watermark: WatermarkOptions,
-  maxEdge = 1600,
+  maxEdge = IMAGE_RASTER_MAX_EDGE,
 ): Promise<void> {
   const res = await fetch(assetUrl);
   if (!res.ok) {
@@ -75,7 +76,11 @@ export async function imageUrlToWatermarkedPng(
   const objUrl = URL.createObjectURL(blobIn);
   try {
     const img = await loadImageElement(objUrl);
-    const { w, h } = scaleToMaxEdge(img.naturalWidth, img.naturalHeight, MAX_EDGE);
+    const { w, h } = scaleToMaxEdge(
+      img.naturalWidth,
+      img.naturalHeight,
+      IMAGE_RASTER_MAX_EDGE,
+    );
 
     const canvas = document.createElement("canvas");
     canvas.width = w;

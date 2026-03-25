@@ -2,6 +2,7 @@
 import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
+import { viewportForPdfPage } from "@/utils/pdf";
 import type { WatermarkOptions } from "@/utils/watermark";
 import { drawWatermarkOnCanvas } from "@/utils/watermark";
 import { NButton, NSpace } from "naive-ui";
@@ -101,8 +102,7 @@ async function render() {
     const page: PDFPageProxy = await currentDoc.getPage(p);
     if (gen !== renderGeneration) return;
 
-    const scale = 1.25;
-    const vp = page.getViewport({ scale });
+    const vp = viewportForPdfPage(page);
     const canvas = canvasRef.value;
     await nextTick();
     if (gen !== renderGeneration) return;
