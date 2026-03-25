@@ -258,7 +258,7 @@ function onTreeSelectKeys(keys: Array<string | number>) {
             collapse-mode="width"
             :collapsed-width="0"
           >
-            <n-card size="small" title="已勾选">
+            <n-card size="small" title="已选择">
               <div class="chk-list">
                 <div
                   v-for="f in store.selectedFiles"
@@ -316,7 +316,21 @@ function onTreeSelectKeys(keys: Array<string | number>) {
                   />
                   {{ store.watermarkRotation }}
                 </div>
-                <span class="muted">位置</span>
+                <div
+                  class="wm-row"
+                  title="大于 1 时在整幅预览/导出图上网格均匀铺开；为 1 时仅使用下方「位置」。"
+                >
+                  <span class="muted">份数</span>
+                  <input
+                    v-model.number="store.watermarkRepeat"
+                    type="range"
+                    min="1"
+                    max="25"
+                    step="1"
+                  />
+                  {{ store.watermarkRepeat }}
+                </div>
+                <span class="muted">位置（仅 1 份时）</span>
                 <n-select v-model:value="store.watermarkPosition" :options="wmPositions" />
               </n-space>
             </n-card>

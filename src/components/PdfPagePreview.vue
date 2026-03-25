@@ -152,6 +152,7 @@ watch(
       props.watermark.position,
       props.watermark.rotationDeg,
       props.watermark.color,
+      props.watermark.repeatCount,
     ] as const,
   () => void render(),
   { immediate: true },

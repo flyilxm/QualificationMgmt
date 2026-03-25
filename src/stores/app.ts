@@ -54,6 +54,8 @@ export const useAppStore = defineStore("app", () => {
   const watermarkFontSize = ref(44);
   const watermarkPosition = ref<WatermarkPosition>("mc");
   const watermarkRotation = ref(-28);
+  /** 水印总份数；1 为单点+位置，大于 1 为整图网格均匀铺开 */
+  const watermarkRepeat = ref(1);
 
   const WM_POSITIONS: readonly WatermarkPosition[] = [
     "tl",
@@ -95,6 +97,7 @@ export const useAppStore = defineStore("app", () => {
       position: watermarkPosition.value,
       rotationDeg: watermarkRotation.value,
       color: "#444444",
+      repeatCount: Math.min(50, Math.max(1, Math.round(watermarkRepeat.value))),
     }),
   );
 
@@ -135,6 +138,10 @@ export const useAppStore = defineStore("app", () => {
     if (typeof rot === "number" && Number.isFinite(rot)) {
       watermarkRotation.value = Math.min(90, Math.max(-90, rot));
     }
+    const rep = await s.get<number>("watermarkRepeat");
+    if (typeof rep === "number" && Number.isFinite(rep)) {
+      watermarkRepeat.value = Math.min(50, Math.max(1, Math.round(rep)));
+    }
   }
 
   async function persistWatermarkSettings() {
@@ -145,6 +152,7 @@ export const useAppStore = defineStore("app", () => {
       await s.set("watermarkFontSize", watermarkFontSize.value);
       await s.set("watermarkPosition", watermarkPosition.value);
       await s.set("watermarkRotation", watermarkRotation.value);
+      await s.set("watermarkRepeat", watermarkRepeat.value);
       await s.save();
     } catch (e) {
       console.error("persistWatermarkSettings", e);
@@ -170,6 +178,7 @@ export const useAppStore = defineStore("app", () => {
       watermarkFontSize,
       watermarkPosition,
       watermarkRotation,
+      watermarkRepeat,
     ],
     schedulePersistWatermark,
   );
@@ -492,6 +501,7 @@ export const useAppStore = defineStore("app", () => {
     watermarkFontSize,
     watermarkPosition,
     watermarkRotation,
+    watermarkRepeat,
     generated,
     generating,
     generateProgress,

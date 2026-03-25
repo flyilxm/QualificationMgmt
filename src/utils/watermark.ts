@@ -16,6 +16,21 @@ export interface WatermarkOptions {
   position: WatermarkPosition;
   rotationDeg: number;
   color: string;
+  /** 水印总份数；1 时用「位置」锚点，大于 1 时在整幅画布上网格均匀铺开 */
+  repeatCount: number;
+}
+
+/** 按画布宽高比取列行数，使 cols×rows≥n，格心均匀铺满画面 */
+function gridDimensions(
+  n: number,
+  width: number,
+  height: number,
+): { cols: number; rows: number } {
+  if (n <= 1) return { cols: 1, rows: 1 };
+  const ratio = width / Math.max(1e-9, height);
+  const cols = Math.max(1, Math.ceil(Math.sqrt(n * ratio)));
+  const rows = Math.max(1, Math.ceil(n / cols));
+  return { cols, rows };
 }
 
 function positionCoords(
@@ -63,12 +78,33 @@ export function drawWatermarkOnCanvas(
   ctx.textBaseline = "middle";
   ctx.textAlign = "center";
 
-  const pad = opt.fontSize * 0.5;
-  const { x, y } = positionCoords(opt.position, width, height, pad);
+  const n = Math.min(50, Math.max(1, Math.round(Number(opt.repeatCount)) || 1));
+  const rot = (opt.rotationDeg * Math.PI) / 180;
 
-  ctx.translate(x, y);
-  ctx.rotate((opt.rotationDeg * Math.PI) / 180);
-  ctx.fillText(text, 0, 0);
+  if (n === 1) {
+    const pad = opt.fontSize * 0.5;
+    const { x, y } = positionCoords(opt.position, width, height, pad);
+    ctx.translate(x, y);
+    ctx.rotate(rot);
+    ctx.fillText(text, 0, 0);
+  } else {
+    const { cols, rows } = gridDimensions(n, width, height);
+    const cellW = width / cols;
+    const cellH = height / rows;
+    let placed = 0;
+    for (let r = 0; r < rows && placed < n; r++) {
+      for (let c = 0; c < cols && placed < n; c++) {
+        const cx = (c + 0.5) * cellW;
+        const cy = (r + 0.5) * cellH;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(rot);
+        ctx.fillText(text, 0, 0);
+        ctx.restore();
+        placed++;
+      }
+    }
+  }
   ctx.restore();
 }
 
