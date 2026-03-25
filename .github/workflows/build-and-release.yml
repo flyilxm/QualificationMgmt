@@ -69,8 +69,6 @@ jobs:
         run: npm ci
 
       - name: Build the app
-        env:
-          CI: "1"
         run: npm run tauri build -- ${{ matrix.args }}
 
       - name: Rename macOS artifacts to Chinese
