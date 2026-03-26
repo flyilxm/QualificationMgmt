@@ -20,7 +20,7 @@ export interface WatermarkOptions {
   position: WatermarkPosition;
   rotationDeg: number;
   color: string;
-  /** 水印总份数；1 时用「位置」锚点，大于 1 时在整幅画布上网格均匀铺开 */
+  /** 水印总份数；1 时用「位置」锚点；大于 1 时分解为 cols×rows=n，每格中心一份，铺满整幅 */
   repeatCount: number;
 }
 
@@ -37,17 +37,33 @@ export function resolveWatermarkFontSizePx(
   return Math.max(6, Math.min(Math.floor(minEdge * 0.48), px));
 }
 
-/** 按画布宽高比取列行数，使 cols×rows≥n，格心均匀铺满画面 */
-function gridDimensions(
+/**
+ * 将 n 分解为 cols×rows === n（因数分解），使列/行比接近画布宽高比，
+ * 每个子格中心各画一份水印，整幅图从左上到右下都有覆盖；避免出现 cols×rows>n
+ * 时按行优先只填前 n 格导致宽图右下角空白。
+ */
+function gridFactorsForEvenSpread(
   n: number,
   width: number,
   height: number,
 ): { cols: number; rows: number } {
   if (n <= 1) return { cols: 1, rows: 1 };
-  const ratio = width / Math.max(1e-9, height);
-  const cols = Math.max(1, Math.ceil(Math.sqrt(n * ratio)));
-  const rows = Math.max(1, Math.ceil(n / cols));
-  return { cols, rows };
+  const target = width / Math.max(1e-9, height);
+  let bestCols = n;
+  let bestRows = 1;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (let rows = 1; rows <= n; rows++) {
+    if (n % rows !== 0) continue;
+    const cols = n / rows;
+    const aspect = cols / rows;
+    const score = Math.abs(Math.log(aspect) - Math.log(target));
+    if (score < bestScore) {
+      bestScore = score;
+      bestCols = cols;
+      bestRows = rows;
+    }
+  }
+  return { cols: bestCols, rows: bestRows };
 }
 
 function positionCoords(
@@ -106,12 +122,11 @@ export function drawWatermarkOnCanvas(
     ctx.rotate(rot);
     ctx.fillText(text, 0, 0);
   } else {
-    const { cols, rows } = gridDimensions(n, width, height);
+    const { cols, rows } = gridFactorsForEvenSpread(n, width, height);
     const cellW = width / cols;
     const cellH = height / rows;
-    let placed = 0;
-    for (let r = 0; r < rows && placed < n; r++) {
-      for (let c = 0; c < cols && placed < n; c++) {
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
         const cx = (c + 0.5) * cellW;
         const cy = (r + 0.5) * cellH;
         ctx.save();
@@ -119,7 +134,6 @@ export function drawWatermarkOnCanvas(
         ctx.rotate(rot);
         ctx.fillText(text, 0, 0);
         ctx.restore();
-        placed++;
       }
     }
   }
