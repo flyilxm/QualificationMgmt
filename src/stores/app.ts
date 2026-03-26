@@ -49,7 +49,8 @@ export const useAppStore = defineStore("app", () => {
 
   const watermarkText = ref("内部资料");
   const watermarkOpacity = ref(0.35);
-  const watermarkFontSize = ref(44);
+  /** 字号相对画布较短边的比例（约 0.02–0.22） */
+  const watermarkFontRatio = ref(0.055);
   const watermarkPosition = ref<WatermarkPosition>("mc");
   const watermarkRotation = ref(-28);
   /** 水印总份数；1 为单点+位置，大于 1 为整图网格均匀铺开 */
@@ -91,7 +92,7 @@ export const useAppStore = defineStore("app", () => {
     (): WatermarkOptions => ({
       text: watermarkText.value,
       opacity: watermarkOpacity.value,
-      fontSize: watermarkFontSize.value,
+      fontSizeRatio: Math.min(0.28, Math.max(0.01, watermarkFontRatio.value)),
       position: watermarkPosition.value,
       rotationDeg: watermarkRotation.value,
       color: "#444444",
@@ -123,9 +124,22 @@ export const useAppStore = defineStore("app", () => {
     if (typeof o === "number" && Number.isFinite(o)) {
       watermarkOpacity.value = Math.min(1, Math.max(0.05, o));
     }
-    const fs = await s.get<number>("watermarkFontSize");
-    if (typeof fs === "number" && Number.isFinite(fs) && fs >= 8 && fs <= 200) {
-      watermarkFontSize.value = fs;
+    const fr = await s.get<number>("watermarkFontRatio");
+    if (typeof fr === "number" && Number.isFinite(fr) && fr >= 0.01 && fr <= 0.3) {
+      watermarkFontRatio.value = Math.min(0.28, Math.max(0.01, fr));
+    } else {
+      const legacy = await s.get<number>("watermarkFontSize");
+      if (
+        typeof legacy === "number" &&
+        Number.isFinite(legacy) &&
+        legacy >= 8 &&
+        legacy <= 200
+      ) {
+        watermarkFontRatio.value = Math.min(
+          0.25,
+          Math.max(0.02, legacy / 1200),
+        );
+      }
     }
     const pos = await s.get<string>("watermarkPosition");
     if (typeof pos === "string" && isWatermarkPosition(pos)) {
@@ -146,7 +160,7 @@ export const useAppStore = defineStore("app", () => {
       const s = await load("settings.json", { defaults: {}, autoSave: false });
       await s.set("watermarkText", watermarkText.value);
       await s.set("watermarkOpacity", watermarkOpacity.value);
-      await s.set("watermarkFontSize", watermarkFontSize.value);
+      await s.set("watermarkFontRatio", watermarkFontRatio.value);
       await s.set("watermarkPosition", watermarkPosition.value);
       await s.set("watermarkRotation", watermarkRotation.value);
       await s.set("watermarkRepeat", watermarkRepeat.value);
@@ -172,7 +186,7 @@ export const useAppStore = defineStore("app", () => {
     [
       watermarkText,
       watermarkOpacity,
-      watermarkFontSize,
+      watermarkFontRatio,
       watermarkPosition,
       watermarkRotation,
       watermarkRepeat,
@@ -438,7 +452,7 @@ export const useAppStore = defineStore("app", () => {
     currentPreviewId,
     watermarkText,
     watermarkOpacity,
-    watermarkFontSize,
+    watermarkFontRatio,
     watermarkPosition,
     watermarkRotation,
     watermarkRepeat,

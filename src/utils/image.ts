@@ -1,7 +1,7 @@
 import type { WatermarkOptions } from "./watermark";
 import { canvasToBlob, drawWatermarkOnCanvas } from "./watermark";
 
-/** 预览与导出须一致，否则同一 fontSize 在不同画布像素密度下相对大小不同 */
+/** 预览与导出须使用同一画布尺寸流水线；字号在 draw 时按短边比例换算 */
 export const IMAGE_RASTER_MAX_EDGE = 8192;
 
 function loadImageElement(src: string): Promise<HTMLImageElement> {

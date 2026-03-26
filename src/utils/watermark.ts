@@ -12,12 +12,29 @@ export type WatermarkPosition =
 export interface WatermarkOptions {
   text: string;
   opacity: number;
-  fontSize: number;
+  /**
+   * 字号相对画布较短边的比例（如 0.06 ≈ 短边的 6% 转为像素字号），
+   * 大图小图视觉占比一致。
+   */
+  fontSizeRatio: number;
   position: WatermarkPosition;
   rotationDeg: number;
   color: string;
   /** 水印总份数；1 时用「位置」锚点，大于 1 时在整幅画布上网格均匀铺开 */
   repeatCount: number;
+}
+
+/** 由短边 × 比例得到实际像素字号，并做上下限防止极端画布 */
+export function resolveWatermarkFontSizePx(
+  width: number,
+  height: number,
+  ratio: number,
+): number {
+  const minEdge = Math.min(width, height);
+  if (minEdge < 1) return 8;
+  const r = Math.min(0.28, Math.max(0.01, Number(ratio) || 0.05));
+  const px = Math.round(minEdge * r);
+  return Math.max(6, Math.min(Math.floor(minEdge * 0.48), px));
 }
 
 /** 按画布宽高比取列行数，使 cols×rows≥n，格心均匀铺满画面 */
@@ -74,7 +91,8 @@ export function drawWatermarkOnCanvas(
   ctx.save();
   ctx.globalAlpha = Math.min(1, Math.max(0, opt.opacity));
   ctx.fillStyle = opt.color;
-  ctx.font = `bold ${opt.fontSize}px sans-serif`;
+  const fontSize = resolveWatermarkFontSizePx(width, height, opt.fontSizeRatio);
+  ctx.font = `bold ${fontSize}px sans-serif`;
   ctx.textBaseline = "middle";
   ctx.textAlign = "center";
 
@@ -82,7 +100,7 @@ export function drawWatermarkOnCanvas(
   const rot = (opt.rotationDeg * Math.PI) / 180;
 
   if (n === 1) {
-    const pad = opt.fontSize * 0.5;
+    const pad = fontSize * 0.5;
     const { x, y } = positionCoords(opt.position, width, height, pad);
     ctx.translate(x, y);
     ctx.rotate(rot);

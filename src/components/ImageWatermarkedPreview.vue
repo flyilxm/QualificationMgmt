@@ -47,7 +47,7 @@ watch(
       props.src,
       props.watermark.text,
       props.watermark.opacity,
-      props.watermark.fontSize,
+      props.watermark.fontSizeRatio,
       props.watermark.position,
       props.watermark.rotationDeg,
       props.watermark.color,

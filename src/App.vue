@@ -325,16 +325,19 @@ async function onSaveZip() {
                   />
                   {{ store.watermarkOpacity.toFixed(2) }}
                 </div>
-                <div class="wm-row">
+                <div
+                  class="wm-row"
+                  title="相对画布较短边的比例，不同分辨率下图上水印视觉大小一致"
+                >
                   <span class="muted">字号</span>
                   <input
-                    v-model.number="store.watermarkFontSize"
+                    v-model.number="store.watermarkFontRatio"
                     type="range"
-                    min="12"
-                    max="120"
-                    step="1"
+                    min="0.02"
+                    max="0.22"
+                    step="0.0025"
                   />
-                  {{ store.watermarkFontSize }}
+                  {{ (store.watermarkFontRatio * 100).toFixed(1) }}%
                 </div>
                 <div class="wm-row">
                   <span class="muted">旋转°</span>
