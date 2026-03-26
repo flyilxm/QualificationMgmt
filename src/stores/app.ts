@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { buildTreeFromFiles, collectTreeNodeKeys } from "@/utils/tree";
 import { filePathToAssetUrl } from "@/utils/fileSrc";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { load } from "@tauri-apps/plugin-store";
@@ -47,7 +46,6 @@ export const useAppStore = defineStore("app", () => {
 
   const selectedIds = ref<string[]>([]);
   const currentPreviewId = ref<string | null>(null);
-  const expandedTreeKeys = ref<string[]>([]);
 
   const watermarkText = ref("内部资料");
   const watermarkOpacity = ref(0.35);
@@ -107,7 +105,6 @@ export const useAppStore = defineStore("app", () => {
       ...f,
       tags: normalizeTags(f.tags),
     }));
-    expandedTreeKeys.value = clampExpandedKeys(expandedTreeKeys.value);
   }
 
   async function persistWorkDir(path: string | null) {
@@ -292,76 +289,20 @@ export const useAppStore = defineStore("app", () => {
     return list;
   });
 
-  function validTreeKeySet(): Set<string> {
-    const nodes = buildTreeFromFiles(filteredFiles.value);
-    return collectTreeNodeKeys(nodes);
-  }
-
-  /** 去掉不存在的节点 key（含误用的 `dir:`，树数据里根本没有这个节点） */
-  function clampExpandedKeys(keys: string[]): string[] {
-    const valid = validTreeKeySet();
-    return keys
-      .map((k) => String(k))
-      .filter((k) => k.length > 0 && k !== "dir:" && valid.has(k));
-  }
-
-  /**
-   * 勿直接 watch filteredFiles：每次 reloadFilesFromDb 都会换新数组引用，会误触发，
-   * 与 NTree 的 expanded 受控状态打架导致卡死。只在「过滤条件」或「可见文件 id 集合」真的变时裁剪。
-   */
-  watch(
-    () =>
-      [
-        filterTags.value.slice().sort().join("\0"),
-        searchText.value,
-        filteredFiles.value
-          .map((f) => f.id)
-          .slice()
-          .sort()
-          .join("\0"),
-      ].join("\n"),
-    () => {
-      expandedTreeKeys.value = clampExpandedKeys(expandedTreeKeys.value);
-    },
-    { flush: "post" },
-  );
-
-  /** 必须用方法更新 ref；模板里 `store.xxx = arr` 对 Pinia setup 的 ref 不可靠 */
-  function setExpandedTreeKeys(keys: Array<string | number>) {
-    expandedTreeKeys.value = clampExpandedKeys(keys.map((k) => String(k)));
-  }
-
-  /** 树只展示 filtered 子集：勾选变更只改可见项，保留不可见仍已选中的 id */
-  function setCheckedKeys(keys: Array<string | number>) {
+  function setFileSelected(id: string, selected: boolean) {
     const visible = new Set(filteredFiles.value.map((f) => f.id));
-    const fromTree = keys
-      .map((k) => String(k))
-      .filter((k) => visible.has(k) && fileMap.value.has(k));
-    const hidden = selectedIds.value.filter((id) => !visible.has(id));
-    selectedIds.value = [...new Set([...hidden, ...fromTree])];
-  }
-
-  function revealFileInTree(fileId: string) {
-    currentPreviewId.value = fileId;
-    const f = fileMap.value.get(fileId);
-    if (!f) return;
-    const parts = f.relativePath.split("/").filter(Boolean);
-    /** 与 buildTreeFromFiles 一致：只有 `dir:/段/...`，没有单独的 `dir:` 节点 */
-    const keys: string[] = [];
-    let acc = "dir:";
-    for (let i = 0; i < parts.length - 1; i++) {
-      acc = `${acc}/${parts[i]!}`;
-      keys.push(acc);
-    }
-    expandedTreeKeys.value = clampExpandedKeys([
-      ...expandedTreeKeys.value,
-      ...keys,
-    ]);
+    if (!visible.has(id) || !fileMap.value.has(id)) return;
+    const hidden = selectedIds.value.filter((x) => !visible.has(x));
+    const visSel = new Set(
+      selectedIds.value.filter((x) => visible.has(x)),
+    );
+    if (selected) visSel.add(id);
+    else visSel.delete(id);
+    selectedIds.value = [...hidden, ...visSel];
   }
 
   function previewFile(fileId: string | null) {
     currentPreviewId.value = fileId;
-    if (fileId) revealFileInTree(fileId);
   }
 
   async function addTagToCurrent(tag: string) {
@@ -495,7 +436,6 @@ export const useAppStore = defineStore("app", () => {
     filterTags,
     selectedIds,
     currentPreviewId,
-    expandedTreeKeys,
     watermarkText,
     watermarkOpacity,
     watermarkFontSize,
@@ -516,10 +456,8 @@ export const useAppStore = defineStore("app", () => {
     bootstrap,
     pickWorkDir,
     runScan,
-    setCheckedKeys,
-    setExpandedTreeKeys,
+    setFileSelected,
     previewFile,
-    revealFileInTree,
     addTagToCurrent,
     removeTagFromCurrent,
     startGenerate,

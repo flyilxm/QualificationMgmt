@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import ImageWatermarkedPreview from "@/components/ImageWatermarkedPreview.vue";
 import PdfPagePreview from "@/components/PdfPagePreview.vue";
+import type { IndexedFile } from "@/db";
 import { useAppStore } from "@/stores/app";
-import { buildTreeFromFiles, type TreeNode } from "@/utils/tree";
 import type { WatermarkPosition } from "@/utils/watermark";
-import type { TreeOption } from "naive-ui";
 import {
   NButton,
   NCard,
+  NCheckbox,
   NConfigProvider,
   NDivider,
   NEmpty,
@@ -20,11 +20,11 @@ import {
   NSelect,
   NSpace,
   NTag,
-  NTree,
+  NTooltip,
   createDiscreteApi,
   zhCN,
 } from "naive-ui";
-import { computed, onMounted, ref } from "vue";
+import { nextTick, onMounted, onUnmounted, ref } from "vue";
 
 const { message } = createDiscreteApi(["message"], {
   configProviderProps: { locale: zhCN },
@@ -32,42 +32,12 @@ const { message } = createDiscreteApi(["message"], {
 
 const store = useAppStore();
 
-/** Pinia 中 expanded 为 ref，用 v-model 经 computed 写回，避免模板里赋值不生效 */
-const treeExpandedKeys = computed({
-  get: () => store.expandedTreeKeys,
-  set: (keys: Array<string | number>) => store.setExpandedTreeKeys(keys),
-});
-
-/** 只传当前过滤结果里仍存在的勾选，避免 NTree cascade 与「幽灵 key」死循环卡死 */
-const treeCheckedKeys = computed({
-  get: () =>
-    store.selectedIds.filter((id) =>
-      store.filteredFiles.some((f) => f.id === id),
-    ),
-  set: (keys: Array<string | number>) => store.setCheckedKeys(keys),
-});
-
-/** 当前预览文件若被过滤掉，则不在树上维持 selected（否则 NTree 受控状态异常） */
-const treeSelectedKeys = computed(() => {
-  const id = store.currentPreviewId;
-  if (!id) return [];
-  if (!store.filteredFiles.some((f) => f.id === id)) return [];
-  return [id];
-});
-
 const tagInput = ref("");
+const fileListEl = ref<HTMLElement | null>(null);
 
-function toTreeOptions(nodes: TreeNode[]): TreeOption[] {
-  return nodes.map((n) => ({
-    key: n.key,
-    label: n.label,
-    disabled: false,
-    isLeaf: n.isLeaf,
-    children: n.children?.length ? toTreeOptions(n.children) : undefined,
-  }));
+function dirHint(f: IndexedFile): string {
+  return f.parentPath ? f.parentPath : "（根目录）";
 }
-
-const treeData = computed(() => toTreeOptions(buildTreeFromFiles(store.filteredFiles)));
 
 const wmPositions: { label: string; value: WatermarkPosition }[] = [
   { label: "左上", value: "tl" },
@@ -81,7 +51,57 @@ const wmPositions: { label: string; value: WatermarkPosition }[] = [
   { label: "右下", value: "br" },
 ];
 
+function shouldIgnoreArrowForFileNav(target: EventTarget | null): boolean {
+  if (!target || !(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  if (tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (tag === "INPUT") {
+    const type = (target as HTMLInputElement).type;
+    if (
+      ["text", "search", "number", "password", "email", "url", "tel", "range"].includes(
+        type,
+      )
+    ) {
+      return true;
+    }
+  }
+  if (target.closest("[data-no-arrow-file-nav]")) return true;
+  return false;
+}
+
+function scrollPreviewRowIntoView(fileId: string) {
+  const root = fileListEl.value;
+  if (!root) return;
+  for (const el of root.querySelectorAll<HTMLElement>(".file-row[data-file-id]")) {
+    if (el.dataset.fileId === fileId) {
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      break;
+    }
+  }
+}
+
+function onArrowFileNav(e: KeyboardEvent) {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  if (shouldIgnoreArrowForFileNav(e.target)) return;
+  const list = store.filteredFiles;
+  if (!list.length) return;
+  e.preventDefault();
+  const curId = store.currentPreviewId;
+  let i = curId ? list.findIndex((f) => f.id === curId) : -1;
+  if (e.key === "ArrowDown") {
+    i = i < 0 ? 0 : Math.min(i + 1, list.length - 1);
+  } else {
+    i = i < 0 ? list.length - 1 : Math.max(i - 1, 0);
+  }
+  const next = list[i];
+  if (!next) return;
+  store.previewFile(next.id);
+  void nextTick(() => scrollPreviewRowIntoView(next.id));
+}
+
 onMounted(async () => {
+  window.addEventListener("keydown", onArrowFileNav, true);
   await store.bootstrap();
   if (!store.workDir) {
     try {
@@ -90,6 +110,10 @@ onMounted(async () => {
       /* user cancel */
     }
   }
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", onArrowFileNav, true);
 });
 
 function onAddTag() {
@@ -133,11 +157,6 @@ async function onSaveZip() {
   }
 }
 
-function onTreeSelectKeys(keys: Array<string | number>) {
-  const raw = keys[keys.length - 1];
-  const k = typeof raw === "number" ? String(raw) : raw;
-  if (k && store.fileMap.has(k)) store.previewFile(k);
-}
 </script>
 
 <template>
@@ -169,7 +188,7 @@ function onTreeSelectKeys(keys: Array<string | number>) {
             :collapsed-width="0"
             content-style="display:flex;flex-direction:column;height:100%;"
           >
-            <div class="left-filters">
+            <div class="left-filters" data-no-arrow-file-nav>
               <n-input
                 v-model:value="store.searchText"
                 size="small"
@@ -189,21 +208,33 @@ function onTreeSelectKeys(keys: Array<string | number>) {
                 @update:value="store.setFilterTags"
               />
             </div>
-            <div class="tree-scroll">
-              <n-tree
-                v-if="treeData.length"
-                block-line
-                checkable
-                cascade
-                check-strategy="child"
-                selectable
-                expand-on-click
-                :data="treeData"
-                v-model:expanded-keys="treeExpandedKeys"
-                v-model:checked-keys="treeCheckedKeys"
-                :selected-keys="treeSelectedKeys"
-                @update:selected-keys="onTreeSelectKeys"
-              />
+            <div ref="fileListEl" class="file-list-scroll" tabindex="-1">
+              <template v-if="store.filteredFiles.length">
+                <div
+                  v-for="f in store.filteredFiles"
+                  :key="f.id"
+                  class="file-row"
+                  :class="{ 'file-row--active': store.currentPreviewId === f.id }"
+                  :data-file-id="f.id"
+                  @click="store.previewFile(f.id)"
+                >
+                  <n-checkbox
+                    :checked="store.selectedIds.includes(f.id)"
+                    size="small"
+                    @update:checked="(v: boolean) => store.setFileSelected(f.id, v)"
+                    @click.stop
+                  />
+                  <n-tooltip placement="right-start" :show-arrow="true" :delay="200">
+                    <template #trigger>
+                      <span class="file-row-label">{{ f.name }}</span>
+                    </template>
+                    <div class="file-tip">
+                      <div><span class="tip-k">所在目录</span>{{ dirHint(f) }}</div>
+                      <div><span class="tip-k">相对路径</span>{{ f.relativePath }}</div>
+                    </div>
+                  </n-tooltip>
+                </div>
+              </template>
               <n-empty v-else description="无匹配文件" size="small" />
             </div>
           </n-layout-sider>
@@ -264,7 +295,7 @@ function onTreeSelectKeys(keys: Array<string | number>) {
                   v-for="f in store.selectedFiles"
                   :key="f.id"
                   class="chk-item"
-                  @click="store.revealFileInTree(f.id)"
+                  @click="store.previewFile(f.id)"
                 >
                   {{ f.relativePath }}
                 </div>
@@ -275,7 +306,7 @@ function onTreeSelectKeys(keys: Array<string | number>) {
                 />
               </div>
             </n-card>
-            <n-card size="small" title="水印">
+            <n-card size="small" title="水印" data-no-arrow-file-nav>
               <n-space vertical size="small">
                 <n-input
                   v-model:value="store.watermarkText"
@@ -334,7 +365,7 @@ function onTreeSelectKeys(keys: Array<string | number>) {
                 <n-select v-model:value="store.watermarkPosition" :options="wmPositions" />
               </n-space>
             </n-card>
-            <n-card size="small" title="操作" class="ops">
+            <n-card size="small" title="操作" class="ops" data-no-arrow-file-nav>
               <n-space vertical style="width: 100%">
                 <n-button
                   type="primary"
@@ -414,11 +445,45 @@ function onTreeSelectKeys(keys: Array<string | number>) {
 .tag-filter {
   width: 100%;
 }
-.tree-scroll {
+.file-list-scroll {
   flex: 1;
   min-height: 0;
   overflow: auto;
   padding: 0 4px 8px;
+}
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.file-row:hover {
+  background: rgba(32, 128, 240, 0.08);
+}
+.file-row--active {
+  background: rgba(32, 128, 240, 0.14);
+}
+.file-row-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-tip {
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 360px;
+}
+.file-tip .tip-k {
+  display: inline-block;
+  min-width: 4.5em;
+  margin-right: 6px;
+  color: #888;
+  font-weight: 500;
 }
 .preview-card {
   flex: 1;
