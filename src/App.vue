@@ -19,6 +19,7 @@ import {
   NProgress,
   NSelect,
   NSpace,
+  NSwitch,
   NTag,
   NTooltip,
   createDiscreteApi,
@@ -329,7 +330,7 @@ async function onSaveZip() {
                   class="wm-row"
                   title="相对画布较短边的比例，不同分辨率下图上水印视觉大小一致"
                 >
-                  <span class="muted">字号</span>
+                  <span class="muted">大小</span>
                   <input
                     v-model.number="store.watermarkFontRatio"
                     type="range"
@@ -350,22 +351,58 @@ async function onSaveZip() {
                   />
                   {{ store.watermarkRotation }}
                 </div>
-                <div
-                  class="wm-row"
-                  title="大于 1 时在整幅预览/导出图上网格均匀铺开；为 1 时仅使用下方「位置」。"
-                >
-                  <span class="muted">份数</span>
-                  <input
-                    v-model.number="store.watermarkRepeat"
-                    type="range"
-                    min="1"
-                    max="25"
-                    step="1"
-                  />
-                  {{ store.watermarkRepeat }}
+                <div class="wm-row wm-row-switch">
+                  <span class="muted">全屏水印</span>
+                  <n-switch v-model:value="store.watermarkFullscreenTile" />
                 </div>
-                <span class="muted">位置（仅 1 份时）</span>
-                <n-select v-model:value="store.watermarkPosition" :options="wmPositions" />
+                <template v-if="store.watermarkFullscreenTile">
+                  <div
+                    class="wm-row"
+                    title="同一行水印之间的疏密（基于字宽推算步长）"
+                  >
+                    <span class="muted">横向间距</span>
+                    <input
+                      v-model.number="store.watermarkTileSpacingX"
+                      type="range"
+                      min="0.25"
+                      max="3"
+                      step="0.05"
+                    />
+                    {{ store.watermarkTileSpacingX.toFixed(2) }}×
+                  </div>
+                  <div
+                    class="wm-row"
+                    title="行与行之间的疏密（基于字高推算步长），约 1–5 倍"
+                  >
+                    <span class="muted">纵向间距</span>
+                    <input
+                      v-model.number="store.watermarkTileSpacingY"
+                      type="range"
+                      min="1"
+                      max="5"
+                      step="0.05"
+                    />
+                    {{ store.watermarkTileSpacingY.toFixed(2) }}×
+                  </div>
+                  <div
+                    class="wm-row"
+                    title="奇数行相对上一行向右偏移的比例，0 为对齐网格，0.5 接近砖缝交错"
+                  >
+                    <span class="muted">交错</span>
+                    <input
+                      v-model.number="store.watermarkTileStagger"
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                    />
+                    {{ store.watermarkTileStagger.toFixed(2) }}
+                  </div>
+                </template>
+                <template v-else>
+                  <span class="muted">位置</span>
+                  <n-select v-model:value="store.watermarkPosition" :options="wmPositions" />
+                </template>
               </n-space>
             </n-card>
             <n-card size="small" title="操作" class="ops" data-no-arrow-file-nav>
@@ -527,6 +564,9 @@ async function onSaveZip() {
   align-items: center;
   gap: 8px;
   font-size: 12px;
+}
+.wm-row-switch {
+  justify-content: space-between;
 }
 .wm-row input[type="range"] {
   flex: 1;

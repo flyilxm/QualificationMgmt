@@ -13,15 +13,27 @@ export interface WatermarkOptions {
   text: string;
   opacity: number;
   /**
-   * 字号相对画布较短边的比例（如 0.06 ≈ 短边的 6% 转为像素字号），
+   * 文字大小相对画布较短边的比例（如 0.06 ≈ 短边的 6% 转为像素字号），
    * 大图小图视觉占比一致。
    */
   fontSizeRatio: number;
   position: WatermarkPosition;
   rotationDeg: number;
   color: string;
-  /** 水印总份数；1 时用「位置」锚点；大于 1 时分解为 cols×rows=n，每格中心一份，铺满整幅 */
-  repeatCount: number;
+  /** true：整幅平铺；false：单点，使用 position */
+  fullscreenTile: boolean;
+  /**
+   * 横向步长倍数（基于字宽推算的基础步长），越大同一行越稀。
+   */
+  tileSpacingX: number;
+  /**
+   * 纵向步长倍数（基于字高推算的基础步长），越大行距越大；有效范围约 1–5。
+   */
+  tileSpacingY: number;
+  /**
+   * 交错强度 0–1：奇数行相对偶数行向右偏移 `tileStagger * stepX`（砖缝效果）。
+   */
+  tileStagger: number;
 }
 
 /** 由短边 × 比例得到实际像素字号，并做上下限防止极端画布 */
@@ -35,35 +47,6 @@ export function resolveWatermarkFontSizePx(
   const r = Math.min(0.28, Math.max(0.01, Number(ratio) || 0.05));
   const px = Math.round(minEdge * r);
   return Math.max(6, Math.min(Math.floor(minEdge * 0.48), px));
-}
-
-/**
- * 将 n 分解为 cols×rows === n（因数分解），使列/行比接近画布宽高比，
- * 每个子格中心各画一份水印，整幅图从左上到右下都有覆盖；避免出现 cols×rows>n
- * 时按行优先只填前 n 格导致宽图右下角空白。
- */
-function gridFactorsForEvenSpread(
-  n: number,
-  width: number,
-  height: number,
-): { cols: number; rows: number } {
-  if (n <= 1) return { cols: 1, rows: 1 };
-  const target = width / Math.max(1e-9, height);
-  let bestCols = n;
-  let bestRows = 1;
-  let bestScore = Number.POSITIVE_INFINITY;
-  for (let rows = 1; rows <= n; rows++) {
-    if (n % rows !== 0) continue;
-    const cols = n / rows;
-    const aspect = cols / rows;
-    const score = Math.abs(Math.log(aspect) - Math.log(target));
-    if (score < bestScore) {
-      bestScore = score;
-      bestCols = cols;
-      bestRows = rows;
-    }
-  }
-  return { cols: bestCols, rows: bestRows };
 }
 
 function positionCoords(
@@ -94,6 +77,8 @@ function positionCoords(
   }
 }
 
+const MAX_TILE_DRAWS = 2500;
+
 /** Draw watermark on existing canvas context (full canvas size). */
 export function drawWatermarkOnCanvas(
   ctx: CanvasRenderingContext2D,
@@ -112,30 +97,45 @@ export function drawWatermarkOnCanvas(
   ctx.textBaseline = "middle";
   ctx.textAlign = "center";
 
-  const n = Math.min(50, Math.max(1, Math.round(Number(opt.repeatCount)) || 1));
   const rot = (opt.rotationDeg * Math.PI) / 180;
 
-  if (n === 1) {
+  if (!opt.fullscreenTile) {
     const pad = fontSize * 0.5;
     const { x, y } = positionCoords(opt.position, width, height, pad);
     ctx.translate(x, y);
     ctx.rotate(rot);
     ctx.fillText(text, 0, 0);
-  } else {
-    const { cols, rows } = gridFactorsForEvenSpread(n, width, height);
-    const cellW = width / cols;
-    const cellH = height / rows;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const cx = (c + 0.5) * cellW;
-        const cy = (r + 0.5) * cellH;
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(rot);
-        ctx.fillText(text, 0, 0);
-        ctx.restore();
-      }
+    ctx.restore();
+    return;
+  }
+
+  const metrics = ctx.measureText(text);
+  const tw = metrics.width;
+  const baseStepX = Math.max(tw + fontSize * 0.35, fontSize * 1.15);
+  const baseStepY = fontSize * 1.28;
+  const mulX = Math.min(3.5, Math.max(0.25, Number(opt.tileSpacingX) || 1));
+  const mulY = Math.min(5, Math.max(1, Number(opt.tileSpacingY) || 2));
+  const minStep = Math.max(4, fontSize * 0.25);
+  const stepX = Math.max(minStep, baseStepX * mulX);
+  const stepY = Math.max(minStep, baseStepY * mulY);
+  const stagger01 = Math.min(1, Math.max(0, Number(opt.tileStagger) || 0));
+  const staggerPx = stagger01 * stepX;
+
+  let drawn = 0;
+  let row = 0;
+  for (let y = -stepY * 2; y < height + stepY * 2; y += stepY) {
+    const ox = row % 2 === 1 ? staggerPx : 0;
+    for (let x = -stepX * 2 + ox; x < width + stepX * 2; x += stepX) {
+      if (drawn >= MAX_TILE_DRAWS) break;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rot);
+      ctx.fillText(text, 0, 0);
+      ctx.restore();
+      drawn++;
     }
+    if (drawn >= MAX_TILE_DRAWS) break;
+    row++;
   }
   ctx.restore();
 }

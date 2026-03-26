@@ -53,8 +53,14 @@ export const useAppStore = defineStore("app", () => {
   const watermarkFontRatio = ref(0.055);
   const watermarkPosition = ref<WatermarkPosition>("mc");
   const watermarkRotation = ref(-28);
-  /** 水印总份数；1 为单点+位置，大于 1 为整图网格均匀铺开 */
-  const watermarkRepeat = ref(1);
+  /** 全屏平铺；关则单点+位置 */
+  const watermarkFullscreenTile = ref(false);
+  /** 全屏平铺横向步长倍数（越大同一行越稀） */
+  const watermarkTileSpacingX = ref(1);
+  /** 全屏平铺纵向步长倍数，范围 1–5，默认 2 */
+  const watermarkTileSpacingY = ref(2);
+  /** 交错 0–1，奇数行右移比例 */
+  const watermarkTileStagger = ref(0);
 
   const WM_POSITIONS: readonly WatermarkPosition[] = [
     "tl",
@@ -96,7 +102,10 @@ export const useAppStore = defineStore("app", () => {
       position: watermarkPosition.value,
       rotationDeg: watermarkRotation.value,
       color: "#444444",
-      repeatCount: Math.min(50, Math.max(1, Math.round(watermarkRepeat.value))),
+      fullscreenTile: watermarkFullscreenTile.value,
+      tileSpacingX: Math.min(3.5, Math.max(0.25, watermarkTileSpacingX.value)),
+      tileSpacingY: Math.min(5, Math.max(1, watermarkTileSpacingY.value)),
+      tileStagger: Math.min(1, Math.max(0, watermarkTileStagger.value)),
     }),
   );
 
@@ -149,9 +158,33 @@ export const useAppStore = defineStore("app", () => {
     if (typeof rot === "number" && Number.isFinite(rot)) {
       watermarkRotation.value = Math.min(90, Math.max(-90, rot));
     }
-    const rep = await s.get<number>("watermarkRepeat");
-    if (typeof rep === "number" && Number.isFinite(rep)) {
-      watermarkRepeat.value = Math.min(50, Math.max(1, Math.round(rep)));
+    const fs = await s.get<boolean>("watermarkFullscreenTile");
+    if (typeof fs === "boolean") {
+      watermarkFullscreenTile.value = fs;
+    } else {
+      const rep = await s.get<number>("watermarkRepeat");
+      if (typeof rep === "number" && Number.isFinite(rep) && rep > 1) {
+        watermarkFullscreenTile.value = true;
+      }
+    }
+    const tsx = await s.get<number>("watermarkTileSpacingX");
+    if (typeof tsx === "number" && Number.isFinite(tsx)) {
+      watermarkTileSpacingX.value = Math.min(3.5, Math.max(0.25, tsx));
+    } else {
+      const legacy = await s.get<number>("watermarkTileSpacing");
+      if (typeof legacy === "number" && Number.isFinite(legacy)) {
+        const vx = Math.min(3.5, Math.max(0.25, legacy));
+        watermarkTileSpacingX.value = vx;
+        watermarkTileSpacingY.value = Math.min(5, Math.max(1, legacy));
+      }
+    }
+    const tsy = await s.get<number>("watermarkTileSpacingY");
+    if (typeof tsy === "number" && Number.isFinite(tsy)) {
+      watermarkTileSpacingY.value = Math.min(5, Math.max(1, tsy));
+    }
+    const tg = await s.get<number>("watermarkTileStagger");
+    if (typeof tg === "number" && Number.isFinite(tg)) {
+      watermarkTileStagger.value = Math.min(1, Math.max(0, tg));
     }
   }
 
@@ -163,7 +196,10 @@ export const useAppStore = defineStore("app", () => {
       await s.set("watermarkFontRatio", watermarkFontRatio.value);
       await s.set("watermarkPosition", watermarkPosition.value);
       await s.set("watermarkRotation", watermarkRotation.value);
-      await s.set("watermarkRepeat", watermarkRepeat.value);
+      await s.set("watermarkFullscreenTile", watermarkFullscreenTile.value);
+      await s.set("watermarkTileSpacingX", watermarkTileSpacingX.value);
+      await s.set("watermarkTileSpacingY", watermarkTileSpacingY.value);
+      await s.set("watermarkTileStagger", watermarkTileStagger.value);
       await s.save();
     } catch (e) {
       console.error("persistWatermarkSettings", e);
@@ -189,7 +225,10 @@ export const useAppStore = defineStore("app", () => {
       watermarkFontRatio,
       watermarkPosition,
       watermarkRotation,
-      watermarkRepeat,
+      watermarkFullscreenTile,
+      watermarkTileSpacingX,
+      watermarkTileSpacingY,
+      watermarkTileStagger,
     ],
     schedulePersistWatermark,
   );
@@ -455,7 +494,10 @@ export const useAppStore = defineStore("app", () => {
     watermarkFontRatio,
     watermarkPosition,
     watermarkRotation,
-    watermarkRepeat,
+    watermarkFullscreenTile,
+    watermarkTileSpacingX,
+    watermarkTileSpacingY,
+    watermarkTileStagger,
     generated,
     generating,
     generateProgress,
