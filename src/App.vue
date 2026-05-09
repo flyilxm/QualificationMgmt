@@ -25,7 +25,7 @@ import {
   createDiscreteApi,
   zhCN,
 } from "naive-ui";
-import { nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 
 const { message } = createDiscreteApi(["message"], {
   configProviderProps: { locale: zhCN },
@@ -116,6 +116,28 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener("keydown", onArrowFileNav, true);
 });
+
+/** 可见文件中被勾选的数量 */
+const visibleSelectedCount = computed(() => {
+  const visibleSet = new Set(store.filteredFiles.map((f) => f.id));
+  return store.selectedIds.filter((id) => visibleSet.has(id)).length;
+});
+/** 全选复选框的三态：全选=true, 部分=null, 无=false */
+const selectAllState = computed<boolean | null>(() => {
+  const total = store.filteredFiles.length;
+  if (total === 0) return false;
+  const cnt = visibleSelectedCount.value;
+  if (cnt === total) return true;
+  if (cnt > 0) return null;
+  return false;
+});
+function onToggleSelectAll() {
+  if (selectAllState.value === true) {
+    store.clearSelection();
+  } else {
+    store.selectAll();
+  }
+}
 
 function onAddTag() {
   void store.addTagToCurrent(tagInput.value).then(() => {
@@ -210,6 +232,23 @@ async function onSaveZip() {
               />
             </div>
             <div ref="fileListEl" class="file-list-scroll" tabindex="-1">
+              <div
+                v-if="store.filteredFiles.length"
+                class="file-row file-row--select-all"
+                data-no-arrow-file-nav
+                @click="onToggleSelectAll"
+              >
+                <n-checkbox
+                  :checked="selectAllState === true"
+                  :indeterminate="selectAllState === null"
+                  size="small"
+                  @update:checked="onToggleSelectAll"
+                  @click.stop
+                />
+                <span class="file-row-label muted">
+                  全选（{{ visibleSelectedCount }}/{{ store.filteredFiles.length }}）
+                </span>
+              </div>
               <template v-if="store.filteredFiles.length">
                 <div
                   v-for="f in store.filteredFiles"
@@ -505,6 +544,14 @@ async function onSaveZip() {
 }
 .file-row--active {
   background: rgba(32, 128, 240, 0.14);
+}
+.file-row--select-all {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  margin-bottom: 2px;
+  position: sticky;
+  top: 0;
+  background: var(--n-color, #fff);
+  z-index: 1;
 }
 .file-row-label {
   flex: 1;

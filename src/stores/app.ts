@@ -342,6 +342,19 @@ export const useAppStore = defineStore("app", () => {
     return list;
   });
 
+  function selectAll() {
+    const visibleIds = filteredFiles.value.map((f) => f.id);
+    const hidden = selectedIds.value.filter(
+      (x) => !new Set(visibleIds).has(x),
+    );
+    selectedIds.value = [...hidden, ...visibleIds];
+  }
+
+  function clearSelection() {
+    const visible = new Set(filteredFiles.value.map((f) => f.id));
+    selectedIds.value = selectedIds.value.filter((x) => !visible.has(x));
+  }
+
   function setFileSelected(id: string, selected: boolean) {
     const visible = new Set(filteredFiles.value.map((f) => f.id));
     if (!visible.has(id) || !fileMap.value.has(id)) return;
@@ -513,6 +526,8 @@ export const useAppStore = defineStore("app", () => {
     pickWorkDir,
     runScan,
     setFileSelected,
+    selectAll,
+    clearSelection,
     previewFile,
     addTagToCurrent,
     removeTagFromCurrent,
