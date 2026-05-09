@@ -4,7 +4,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { load } from "@tauri-apps/plugin-store";
 import { db, type FileKind, type IndexedFile } from "@/db";
 import { imageUrlToWatermarkedPng } from "@/utils/image";
-import { loadPdfDocument, renderPdfPageToWatermarkedPng } from "@/utils/pdf";
+import { loadPdfDocument, renderPdfPageToWatermarkedPng, renderPdfToMergedWatermarkedPdf } from "@/utils/pdf";
 import type { WatermarkOptions, WatermarkPosition } from "@/utils/watermark";
 import Fuse from "fuse.js";
 import { defineStore } from "pinia";
@@ -61,6 +61,8 @@ export const useAppStore = defineStore("app", () => {
   const watermarkTileSpacingY = ref(2);
   /** 交错 0–1，奇数行右移比例 */
   const watermarkTileStagger = ref(0);
+  /** 多页 PDF 合并为单个 PDF 输出（默认 false：每页单独 PNG） */
+  const mergeToPdf = ref(false);
 
   const WM_POSITIONS: readonly WatermarkPosition[] = [
     "tl",
@@ -186,6 +188,8 @@ export const useAppStore = defineStore("app", () => {
     if (typeof tg === "number" && Number.isFinite(tg)) {
       watermarkTileStagger.value = Math.min(1, Math.max(0, tg));
     }
+    const mtp = await s.get<boolean>("mergeToPdf");
+    if (typeof mtp === "boolean") mergeToPdf.value = mtp;
   }
 
   async function persistWatermarkSettings() {
@@ -200,6 +204,7 @@ export const useAppStore = defineStore("app", () => {
       await s.set("watermarkTileSpacingX", watermarkTileSpacingX.value);
       await s.set("watermarkTileSpacingY", watermarkTileSpacingY.value);
       await s.set("watermarkTileStagger", watermarkTileStagger.value);
+      await s.set("mergeToPdf", mergeToPdf.value);
       await s.save();
     } catch (e) {
       console.error("persistWatermarkSettings", e);
@@ -229,6 +234,7 @@ export const useAppStore = defineStore("app", () => {
       watermarkTileSpacingX,
       watermarkTileSpacingY,
       watermarkTileStagger,
+      mergeToPdf,
     ],
     schedulePersistWatermark,
   );
@@ -410,6 +416,7 @@ export const useAppStore = defineStore("app", () => {
     const list = selectedFiles.value;
     if (!list.length) return;
     const wm = watermarkOptions.value;
+    const doMerge = mergeToPdf.value;
     generating.value = true;
     generated.value = [];
     generateProgress.value = { done: 0, total: list.length };
@@ -427,9 +434,16 @@ export const useAppStore = defineStore("app", () => {
             try {
               const n = pdf.numPages;
               const base = stem(file.name);
-              for (let p = 1; p <= n; p++) {
-                const blob = await renderPdfPageToWatermarkedPng(pdf, p, wm);
-                out.push({ name: `${base}_${p}.png`, blob });
+              if (doMerge && n > 1) {
+                // 多页合并输出为单个 PDF
+                const blob = await renderPdfToMergedWatermarkedPdf(pdf, wm);
+                out.push({ name: `${base}_wm.pdf`, blob });
+              } else {
+                // 逐页输出 PNG（单页 PDF 或未开启合并时）
+                for (let p = 1; p <= n; p++) {
+                  const blob = await renderPdfPageToWatermarkedPng(pdf, p, wm);
+                  out.push({ name: n > 1 ? `${base}_${p}.png` : `${base}_wm.png`, blob });
+                }
               }
             } finally {
               void pdf.destroy();
@@ -511,6 +525,7 @@ export const useAppStore = defineStore("app", () => {
     watermarkTileSpacingX,
     watermarkTileSpacingY,
     watermarkTileStagger,
+    mergeToPdf,
     generated,
     generating,
     generateProgress,

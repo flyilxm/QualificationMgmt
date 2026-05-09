@@ -446,6 +446,10 @@ async function onSaveZip() {
             </n-card>
             <n-card size="small" title="操作" class="ops" data-no-arrow-file-nav>
               <n-space vertical style="width: 100%">
+                <div class="wm-row wm-row-switch" title="勾选后，多页 PDF 处理结果将合并为单个 PDF 文件输出；单页文件不受影响">
+                  <span class="muted">多页合并为 PDF</span>
+                  <n-switch v-model:value="store.mergeToPdf" size="small" />
+                </div>
                 <n-button
                   type="primary"
                   block
