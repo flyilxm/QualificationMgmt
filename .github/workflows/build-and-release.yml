@@ -24,6 +24,7 @@ jobs:
             args: "--no-bundle"
 
     runs-on: ${{ matrix.platform }}
+    environment: Thunisoft
 
     steps:
       - name: Checkout repository
