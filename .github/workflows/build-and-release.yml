@@ -49,7 +49,19 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build the app
+      - name: Build the app (macOS - 签名 + 公证)
+        if: matrix.platform == 'macos-latest'
+        run: npm run tauri build -- ${{ matrix.args }}
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Build the app (Windows)
+        if: matrix.platform == 'windows-latest'
         run: npm run tauri build -- ${{ matrix.args }}
 
       - name: Rename macOS artifacts to Chinese
