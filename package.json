@@ -1,6 +1,6 @@
 {
   "name": "qualification-mgmt",
-  "description": "Desktop app for managing qualification images and PDFs with indexing, tags, watermarks, and ZIP export.",
+  "description": "用于在本地工作目录中管理资质类图片与 PDF 的桌面应用，支持索引、标签、水印与 ZIP 导出。",
   "private": true,
   "version": "0.3.0",
   "license": "MIT",
