@@ -75,4 +75,4 @@ npm run tauri build
 
 ## 许可证
 
-Rust 侧 `src-tauri/Cargo.toml` 当前声明为 **MIT**；如需统一仓库协议，可在根目录补充 `LICENSE` 并在 `package.json` 中增加 `license` 字段。
+本项目采用 [MIT License](LICENSE)。
