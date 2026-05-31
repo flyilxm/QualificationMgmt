@@ -1,5 +1,6 @@
 {
   "name": "qualification-mgmt",
+  "description": "Desktop app for managing qualification images and PDFs with indexing, tags, watermarks, and ZIP export.",
   "private": true,
   "version": "0.3.0",
   "license": "MIT",
